@@ -1,4 +1,5 @@
 import re
+import os
 
 
 class Disk:
@@ -6,6 +7,7 @@ class Disk:
         self.alloc_unit_size = 16  # UA
         self.total_units = 4096  # nr total de UA
 
+        # reprezinta nr de unitati de alocare
         self.dimfat = (self.total_units * 2) // self.alloc_unit_size  # dim fat in cadrul harddisk
         self.dimroot = 64  # nr fisiere
         self.index_fis = self.dimfat + self.dimroot  # index start pt fisiere
@@ -13,9 +15,7 @@ class Disk:
         # disk matrix
         self.data = [[0] * (self.alloc_unit_size) for i in range(self.total_units)]
         # fat table ,1 pt fat 2 pt root 0 pt spataiu liber pentru fisiere
-        self.fat_vector = (
-            [1] * self.dimfat + [2] * self.dimroot + [0] * (self.total_units - (self.dimfat + self.dimroot))
-        )
+        self.fat_vector = [1] * self.dimfat + [2] * self.dimroot + [0] * (self.total_units - (self.dimfat + self.dimroot))
 
         self.root = [[0] * self.alloc_unit_size for i in range(self.dimroot)]
 
@@ -39,13 +39,13 @@ class Disk:
             val_split1, val_split2 = val[:8], val[8:]
 
             # punem pe disk ,
-            self.data[row // self.alloc_unit_size][
-                index_col % self.alloc_unit_size
-            ] = val_split1  # row // 16 rezulta mereu partea intreaga
+            self.data[row // (self.alloc_unit_size // 2)][index_col % self.alloc_unit_size] = val_split1  # row // 16 rezulta mereu partea intreaga
             index_col += 1
-            self.data[row // self.alloc_unit_size][index_col % self.alloc_unit_size] = val_split2
+            self.data[row // (self.alloc_unit_size // 2)][index_col % self.alloc_unit_size] = val_split2
             index_col += 1
             # acum pe disc doua intrari adiacente reprezinta un int din fat table
+        #     print(row)
+        # print(index_col)
 
     # writes root on disk
     def write_root_in_data(self):
@@ -73,9 +73,7 @@ class Disk:
         else:
             unit_to_fill = prima_ua  # index unitate de aloc pentru fisier
             # nume,   ext,     dim,      prim_ua,   flag
-            nume = [
-                i for i in inp[0].ljust(8, "0")
-            ]  # deoarece nume trebuie sa consume 8 "bits" ljust adauga in dreapta 0 pana la lungime 8
+            nume = [i for i in inp[0].ljust(8, "0")]  # deoarece nume trebuie sa consume 8 "bits" ljust adauga in dreapta 0 pana la lungime 8
             ext = [i for i in inp[1].ljust(3, "0")]
 
             dim = bin(int(inp[2]))[2:].zfill(16)
@@ -85,9 +83,7 @@ class Disk:
             prima_ua_split1, prima_ua_split2 = prima_ua[:8], prima_ua[8:]
 
             # nume 8,  ext 3, dim(impreuna 2), prima_ua(impreuna 2), flag 1
-            self.root[root_unit_index] = (
-                nume + ext + [dim_split1] + [dim_split2] + [prima_ua_split1] + [prima_ua_split2] + [mod]
-            )  # adaugam in root
+            self.root[root_unit_index] = nume + ext + [dim_split1] + [dim_split2] + [prima_ua_split1] + [prima_ua_split2] + [mod]  # adaugam in root
 
             dim_fisier = int(inp[2])
             # momentan trecem unitatea curenta ca fiind folosita
@@ -179,9 +175,7 @@ class Disk:
                     dim_fisier = int(self.root[i][11] + self.root[i][12], 2)
                     prima_ua = int(self.root[i][13] + self.root[i][14], 2)
                     flag = {1: "-num", 2: "-alfa", 3: "-hex"}.get(self.root[i][15])
-                    print(
-                        f"{nume}.{ext}    size:{dim_fisier}, first_ua={prima_ua} tip_fisier: {flag}"
-                    )  # tip fisier in sensul ce info contine, alfa num sau hex
+                    print(f"{nume}.{ext}    size:{dim_fisier}, first_ua={prima_ua} tip_fisier: {flag}")  # tip fisier in sensul ce info contine, alfa num sau hex
 
             print(f"disk space in-use = {self.print_fat_in_use() * self.alloc_unit_size}")
 
@@ -239,9 +233,7 @@ class Disk:
 
         # initializeaza disk ca la inceput
         self.data = [[0] * (self.alloc_unit_size) for i in range(self.total_units)]
-        self.fat_vector = (
-            [1] * self.dimfat + [2] * self.dimroot + [0] * (self.total_units - (self.dimfat + self.dimroot))
-        )
+        self.fat_vector = [1] * self.dimfat + [2] * self.dimroot + [0] * (self.total_units - (self.dimfat + self.dimroot))
         self.root = [[0] * self.alloc_unit_size for i in range(self.dimroot)]
 
         self.write_fat_in_data()
@@ -265,19 +257,10 @@ class Disk:
             if self.root[i][0] not in [0, "?"]:
                 if "".join([i for i in self.root[i][:8] if i != "0"]) == name:  # daca este gasit
                     ext = [x for x in "".join([i for i in self.root[i][8:11] if i != "0"]).ljust(3, "0")]  # extensia
-                    # dim_fisier = int(self.root[i][11] + self.root[i][12], 2)
                     dim_split1, dim_split2 = self.root[i][11], self.root[i][12]
                     of_prima_ua = int(self.root[i][13] + self.root[i][14], 2)
                     mod = self.root[i][15]
                     found = True
-
-                    # old copy method(cream fisier nou) folosind flag (alfa , num, hex) de la fisier vechi
-                    # # creeaza un nou fisier cu nume_nou, extensia(fisier_original) si dim(fisier_original)
-                    # if self.create_file([new_name, ext, dim_fisier], mod=self.root[i][15]):  # daca True
-                    #     self.write_root_in_data()
-                    #     self.write_fat_in_data()
-                    #     print(f"file '{name}' copied to '{new_name}'")
-                    #     return True
 
         if found:
             nf_prima_ua = -1
@@ -302,9 +285,7 @@ class Disk:
             nf_prima_ua_split1, nf_prima_ua_split2 = nf_prima_ua[:8], nf_prima_ua[8:]
 
             # nume 8,  ext 3, dim(impreuna 2), prima_ua(impreuna 2), flag 1
-            self.root[root_unit_index] = (
-                new_name + ext + [dim_split1] + [dim_split2] + [nf_prima_ua_split1] + [nf_prima_ua_split2] + [mod]
-            )
+            self.root[root_unit_index] = new_name + ext + [dim_split1] + [dim_split2] + [nf_prima_ua_split1] + [nf_prima_ua_split2] + [mod]
 
             dim_fisier = int(self.root[root_unit_index][11] + self.root[root_unit_index][12], 2)
 
@@ -387,6 +368,56 @@ class Disk:
         print("space - available disk space")
         print("fat state - prints the index of allocation units that are in-use by files")
         print("exit - exit program")
+
+    # print disk matrix
+    def print_data(self):
+        for index, unit in enumerate(self.data):
+            print(f"{index} {unit}")
+
+    # pentru o simplificare a codului vom utiliza doar un fisier pentru a salva diskul
+    # apelata de comanda "save" salveaza diskul in fisierul disk.txt
+    def save_disk(self):
+        if os.path.exists("disk.txt"):
+            confirm_overwrite = ""
+            while confirm_overwrite not in ["y", "n"]:
+                confirm_overwrite = input("disk.txt already exists. Overwrite? (y/n): ")
+            if confirm_overwrite == "n":
+                return -1
+
+        with open("disk.txt", "w") as f:
+            f.write(str(self.data))
+
+        print("disk saved successfully!")
+
+    # functie load disk commanda pentru apelare este "load" incarca din fisierul curent daca exista disk.txt
+    def load_disk(self):
+        if not os.path.exists("disk.txt"):
+            print("Warning! no disk to load!")
+            return -1
+
+        if self.print_fat_in_use() > 0:
+            confirm_overwrite = ""
+            while confirm_overwrite not in ["y", "n"]:
+                confirm_overwrite = input("Warning!current disk is not empty all files will be lost confirm? (y/n): ")
+            if confirm_overwrite == "n":
+                return -1
+
+        with open("disk.txt", "r") as f:
+            self.data = eval(f.read())  #
+
+        # scriem in fat de pe disk
+        c_unit = 0
+        for index, unitate in enumerate(self.data[: self.dimfat]):
+            unitate = [int("".join(unitate[i] + unitate[i + 1]), 2) for i in range(0, len(unitate), 2)]
+            self.fat_vector[c_unit : c_unit + 8] = unitate
+            c_unit += 8
+        c_root = 0
+        # scriem in root de pe disk
+        for root_unit in self.data[self.dimfat : self.dimfat + self.dimroot]:
+            self.root[c_root] = root_unit
+            c_root += 1
+
+        print("disk loaded successfully!")
 
 
 d = Disk()
@@ -483,12 +514,24 @@ try deleting some files or creating a smaller file"""
     if ren_match:  # rename
         inp = inp.lower().split()
         if d.check_name_exists(inp[1]):
+            if len(inp[2]) > 8:
+                print(f"Warning NEWFILENAME too long! filename must be at most 8 chars!")
+                continue
             d.rename_file(inp[1], inp[2])
         else:
             print(f"file '{inp[1]}' not found")
         continue
     if inp in ["-help", "help"]:
         d.help_cmd()
+        continue
+    if inp == "data":
+        d.print_data()
+        continue
+    if inp == "save":
+        d.save_disk()
+        continue
+    if inp == "load":
+        d.load_disk()
         continue
 
     print("invalid cmd try -help cmd for available commands")
